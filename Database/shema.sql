@@ -2,6 +2,9 @@
 -- BASE DE DATOS: Terminal de Transporte
 -- ===========================================
 
+CREATE DATABASE IF NOT EXISTS `Terminal`;
+USE `Terminal`;
+
 
 
 -- ===========================================
