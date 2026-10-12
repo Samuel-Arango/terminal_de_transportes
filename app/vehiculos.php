@@ -1,55 +1,73 @@
 <?php
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/auth.php';
+requireRole(['admin', 'empresa']);
 
-require_once __DIR__.'/includes/db.php';
-require_once __DIR__.'/includes/auth.php';
-requireRole(['admin','vendedor']);
-require_once __DIR__.'/includes/header.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
 
+    $accion = $_POST['accion'] ?? 'crear';
 
-if (isset($_GET['del'])) {
-  $stmt = $pdo->prepare("DELETE FROM vehiculos WHERE id=?");
-  $stmt->execute([(int)$_GET['del']]);
-  echo '<p class="msg ok">Vehículo eliminado.</p>';
+    if ($accion === 'eliminar') {
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $pdo->prepare('DELETE FROM vehiculos WHERE id = ?')->execute([$id]);
+            flash('ok', 'Vehículo eliminado.');
+        }
+        header('Location: vehiculos.php');
+        exit;
+    }
+
+    $empresaId = (int) ($_POST['empresa_id'] ?? 0);
+    $tipo      = trim($_POST['tipo'] ?? '');
+    $capacidad = (int) ($_POST['capacidad'] ?? 0);
+    $placa     = trim($_POST['placa'] ?? '');
+
+    if ($empresaId && $tipo !== '' && $capacidad > 0) {
+        $pdo->prepare('INSERT INTO vehiculos (empresa_id, tipo, capacidad, placa) VALUES (?, ?, ?, ?)')
+            ->execute([$empresaId, $tipo, $capacidad, $placa !== '' ? $placa : null]);
+        flash('ok', 'Vehículo creado.');
+    } else {
+        flash('error', 'Datos incompletos.');
+    }
+    header('Location: vehiculos.php');
+    exit;
 }
 
+require_once __DIR__ . '/includes/header.php';
 
-$empresas = $pdo->query("SELECT id, nombre FROM empresas ORDER BY nombre")->fetchAll();
-
-// Alta
-if ($_SERVER['REQUEST_METHOD']==='POST') {
-  $empresa_id = (int)($_POST['empresa_id'] ?? 0);
-  $tipo       = trim($_POST['tipo'] ?? '');
-  $capacidad  = (int)($_POST['capacidad'] ?? 0);
-  $placa      = trim($_POST['placa'] ?? '');
-
-  if ($empresa_id && $tipo !== '' && $capacidad > 0) {
-    $stmt = $pdo->prepare("INSERT INTO vehiculos (empresa_id,tipo,capacidad,placa) VALUES (?,?,?,?)");
-    $stmt->execute([$empresa_id,$tipo,$capacidad,$placa]);
-    echo '<p class="msg ok">Vehículo creado.</p>';
-  } else {
-    echo '<p class="msg error">Datos incompletos.</p>';
-  }
-}
-
-
-$vehiculos = $pdo->query("
-  SELECT v.id, v.tipo, v.capacidad, v.placa, e.nombre AS empresa
-  FROM vehiculos v JOIN empresas e ON e.id=v.empresa_id
-  ORDER BY v.id DESC")->fetchAll();
+$empresas = $pdo->query('SELECT id, nombre FROM empresas ORDER BY nombre')->fetchAll();
+$vehiculos = $pdo->query(
+    'SELECT v.id, v.tipo, v.capacidad, v.placa, e.nombre AS empresa
+     FROM vehiculos v JOIN empresas e ON e.id = v.empresa_id
+     ORDER BY v.id DESC'
+)->fetchAll();
 ?>
-<h2>Vehículos</h2>
+<div class="page-head">
+  <div>
+    <h2>Vehículos</h2>
+    <p class="muted"><?= count($vehiculos) ?> vehículos registrados.</p>
+  </div>
+</div>
 
 <table class="tbl">
   <thead><tr><th>#</th><th>Empresa</th><th>Tipo</th><th>Capacidad</th><th>Placa</th><th></th></tr></thead>
   <tbody>
-    <?php foreach($vehiculos as $v): ?>
+    <?php foreach ($vehiculos as $v): ?>
       <tr>
-        <td><?=$v['id']?></td>
-        <td><?=htmlspecialchars($v['empresa'])?></td>
-        <td><?=htmlspecialchars($v['tipo'])?></td>
-        <td><?=$v['capacidad']?></td>
-        <td><?=htmlspecialchars($v['placa'])?></td>
-        <td><a href="?del=<?=$v['id']?>" onclick="return confirm('¿Eliminar vehículo?')">Eliminar</a></td>
+        <td><?= (int) $v['id'] ?></td>
+        <td><?= e($v['empresa']) ?></td>
+        <td><?= e($v['tipo']) ?></td>
+        <td><?= (int) $v['capacidad'] ?></td>
+        <td><?= e($v['placa']) ?></td>
+        <td>
+          <form method="post" onsubmit="return confirm('¿Eliminar vehículo?');" style="display:inline">
+            <?= csrf_field() ?>
+            <input type="hidden" name="accion" value="eliminar">
+            <input type="hidden" name="id" value="<?= (int) $v['id'] ?>">
+            <button class="btn btn-danger btn-sm" type="submit">Eliminar</button>
+          </form>
+        </td>
       </tr>
     <?php endforeach; ?>
   </tbody>
@@ -57,18 +75,19 @@ $vehiculos = $pdo->query("
 
 <h3>Nuevo vehículo</h3>
 <form method="post" class="form grid">
+  <?= csrf_field() ?>
+  <input type="hidden" name="accion" value="crear">
   <label>Empresa
     <select name="empresa_id" required>
       <option value="">Seleccione</option>
-      <?php foreach($empresas as $e): ?>
-        <option value="<?=$e['id']?>"><?=htmlspecialchars($e['nombre'])?></option>
+      <?php foreach ($empresas as $emp): ?>
+        <option value="<?= (int) $emp['id'] ?>"><?= e($emp['nombre']) ?></option>
       <?php endforeach; ?>
     </select>
   </label>
   <label>Tipo <input name="tipo" placeholder="camión, buseta…" required></label>
   <label>Capacidad <input type="number" name="capacidad" min="1" required></label>
   <label>Placa <input name="placa" placeholder="Opcional"></label>
-  <button>Guardar</button>
+  <div class="form-full"><button class="btn btn-primary">Guardar vehículo</button></div>
 </form>
-
-<?php require_once __DIR__.'/includes/footer.php'; ?>
+<?php require_once __DIR__ . '/includes/footer.php'; ?>

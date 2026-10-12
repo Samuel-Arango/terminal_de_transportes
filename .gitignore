@@ -1,0 +1,8 @@
+# Credenciales y archivos locales
+.env
+*.log
+
+# Sistema
+Thumbs.db
+.DS_Store
+desktop.ini
